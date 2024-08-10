@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2인용 핑퐁 게임</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/6/6f/Football_pitch.svg');
+            background-size: cover;
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+        }
+        #title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 32px;
+            font-weight: bold;
+        }
+        #nameForm {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: absolute;
+            top: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #nameForm input {
+            margin: 5px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #nameForm button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #endGameMenu {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            position: absolute;
+            top: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #endGameMenu button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">2인용 핑퐁 게임</div>
+    <div id="nameForm">
+        <input type="text" id="player1Name" placeholder="Player 1 Name" required>
+        <input type="text" id="player2Name" placeholder="Player 2 Name" required>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+    <div id="scoreBoard" style="display: none;">Player 1: 0 | Player 2: 0</div>
+    <canvas id="gameCanvas" width="800" height="400" style="display: none;"></canvas>
+    <div id="endGameMenu">
+        <p>게임 종료! <span id="winnerName"></span> 승리!</p>
+        <button onclick="restartGame()">재시작</button>
+        <button onclick="goHome()">홈으로</button>
+    </div>
+    <audio id="cheerSound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const nameForm = document.getElementById('nameForm');
+        const endGameMenu = document.getElementById('endGameMenu');
+        const winnerNameElem = document.getElementById('winnerName');
+        const cheerSound = document.getElementById('cheerSound');
+
+        let player1Name = 'Player 1';
+        let player2Name = 'Player 2';
+        const ballSize = 20;
+        const paddleWidth = 10, paddleHeight = 100;
+        const paddleSpeed = 8;
+        const ballSpeed = 5; // 공속도 설정
+        const winningScore = 5;
+
+        let paddle1Y = (canvas.height - paddleHeight) / 2;
+        let paddle2Y = (canvas.height - paddleHeight) / 2;
+        let ballX = canvas.width / 2, ballY = canvas.height / 2;
+        let ballSpeedX = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+        let ballSpeedY = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+
+        let player1Score = 0;
+        let player2Score = 0;
+        let gameOver = false;
+
+        const keys = {};
+
+        document.addEventListener('keydown', (event) => {
+            keys[event.key] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+        });
+
+        function startGame() {
+            player1Name = document.getElementById('player1Name').value || 'Player 1';
+            player2Name = document.getElementById('player2Name').value || 'Player 2';
+
+            nameForm.style.display = 'none';
+            scoreBoard.style.display = 'block';
+            canvas.style.display = 'block';
+            endGameMenu.style.display = 'none'; // Hide end game menu
+
+            // Reset game state and start the game loop
+            resetGame();
+            gameLoop();
+        }
+
+        function movePaddles() {
+            if (gameOver) return;
+
+            // Player 1 (W, S keys)
+            if (keys['w'] && paddle1Y > 0) {
+                paddle1Y -= paddleSpeed;
+            }
+            if (keys['s'] && paddle1Y < canvas.height - paddleHeight) {
+                paddle1Y += paddleSpeed;
+            }
+
+            // Player 2 (Arrow Up, Arrow Down keys)
+            if (keys['ArrowUp'] && paddle2Y > 0) {
+                paddle2Y -= paddleSpeed;
+            }
+            if (keys['ArrowDown'] && paddle2Y < canvas.height - paddleHeight) {
+                paddle2Y += paddleSpeed;
+            }
+        }
+
+        function moveBall() {
+            if (gameOver) return;
+
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+
+            // Collision with top and bottom walls
+            if (ballY <= 0 || ballY >= canvas.height - ballSize) {
+                ballSpeedY = -ballSpeedY;
+            }
+
+            // Collision with paddles
+            if (
+                (ballX <= paddleWidth && ballY >= paddle1Y && ballY <= paddle1Y + paddleHeight) ||
+                (ballX >= canvas.width - paddleWidth - ballSize && ballY >= paddle2Y && ballY <= paddle2Y + paddleHeight)
+            ) {
+                ballSpeedX = -ballSpeedX;
+            }
+
+            // Ball out of bounds
+            if (ballX <= 0) {
+                player2Score++;
+                cheerSound.play(); // Play cheer sound
+                resetBall();
+                checkGameOver();
+            } else if (ballX >= canvas.width - ballSize) {
+                player1Score++;
+                cheerSound.play(); // Play cheer sound
+                resetBall();
+                checkGameOver();
+            }
+        }
+
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            // Reset ball speed and direction to ensure it remains consistent
+            ballSpeedX = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+            ballSpeedY = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+            updateScoreBoard();
+        }
+
+        function checkGameOver() {
+            if (player1Score >= winningScore || player2Score >= winningScore) {
+                gameOver = true;
+                winnerNameElem.textContent = player1Score >= winningScore ? player1Name : player2Name;
+                endGameMenu.style.display = 'flex'; // Show end game menu
+                canvas.style.display = 'none'; // Hide the canvas
+                scoreBoard.style.display = 'none'; // Hide score board
+            }
+        }
+
+        function restartGame() {
+            endGameMenu.style.display = 'none'; // Hide end game menu
+            canvas.style.display = 'block'; // Show the canvas
+            scoreBoard.style.display = 'block'; // Show score board
+
+            // Reset game state and set ball speed to ensure it remains consistent
+            player1Score = 0;
+            player2Score = 0;
+            gameOver = false;
+            resetBall();
+            updateScoreBoard();
+            gameLoop();
+        }
+
+        function goHome() {
+            endGameMenu.style.display = 'none'; // Hide end game menu
+            nameForm.style.display = 'flex'; // Show name form
+            canvas.style.display = 'none'; // Hide the canvas
+            scoreBoard.style.display = 'none'; // Hide score board
+        }
+
+        function resetGame() {
+            player1Score = 0;
+            player2Score = 0;
+            gameOver = false;
+            resetBall();
+            updateScoreBoard();
+        }
+
+        function updateScoreBoard() {
+            scoreBoard.textContent = `${player1Name}: ${player1Score} | ${player2Name}: ${player2Score}`;
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw paddles
+            ctx.fillStyle = '#ff0000'; // Red for Player 1
+            ctx.fillRect(0, paddle1Y, paddleWidth, paddleHeight); // Left paddle
+
+            ctx.fillStyle = '#0000ff'; // Blue for Player 2
+            ctx.fillRect(canvas.width - paddleWidth, paddle2Y, paddleWidth, paddleHeight); // Right paddle
+
+            // Draw ball (축구공 모양)
+            ctx.fillStyle = '#fff'; // White for the ball
+            ctx.beginPath();
+            ctx.arc(ballX + ballSize / 2, ballY + ballSize / 2, ballSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw a simple soccer ball pattern
+            ctx.fillStyle = '#000'; // Black pattern for the ball
+            ctx.beginPath();
+            ctx.moveTo(ballX + ballSize / 2, ballY + ballSize / 2 - ballSize / 4);
+            ctx.lineTo(ballX + ballSize / 2 - ballSize / 8, ballY + ballSize / 2);
+            ctx.lineTo(ballX + ballSize / 2 + ballSize / 8, ballY + ballSize / 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function gameLoop() {
+            movePaddles();
+            moveBall();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
